@@ -1,36 +1,25 @@
 module Main where
 
-import Data.List
-import Control.Monad
 import Language.Haskell.Interpreter
 
+newtype ModName = ModName ModuleName
+newtype FunctionName = FunctionName String
+newtype FunctionType = FunctionType String
+
+getTypeOf :: FilePath -> ModName -> FunctionName -> Interpreter (FunctionType)
+getTypeOf fp mn fn = do
+  loadModules [fp]
+  let (ModName mn') = mn
+  setTopLevelModules [mn']
+  let (FunctionName fn') = fn
+  FunctionType <$> (typeOf fn')
+
+getTypeStringOf :: FilePath -> ModName -> FunctionName -> IO (String)
+getTypeStringOf fp mn fn = do
+  r <- runInterpreter $ getTypeOf fp mn fn
+  case r of
+    Left err -> pure (show err)
+    Right fnTy -> pure . (\(FunctionType fty) -> fty) $ fnTy
+
 main :: IO ()
-main = do r <- runInterpreter testHint
-          case r of
-            Left err -> putStrLn $ errorString err
-            Right () -> return ()
-
-errorString :: InterpreterError -> String
-errorString (WontCompile es) = intercalate "\n" (header : map unbox es)
-  where
-    header = "ERROR: Won't compile:"
-    unbox (GhcError e) = e
-errorString e = show e
-
-say :: String -> Interpreter ()
-say = liftIO . putStrLn
-
-say' = liftIO . print
-
-emptyLine :: Interpreter ()
-emptyLine = say ""
-
--- observe that Interpreter () is an alias for InterpreterT IO ()
-testHint :: Interpreter ()
-testHint = do
-      loadModules ["Sample.hs"]
-      say "What is exported by module X?"
-      mapM_ say' =<< getModuleExports "X"
-      emptyLine
-      say =<< typeOf "x"
-      say "done"
+main = putStrLn =<< getTypeStringOf "Sample.hs" (ModName "X") (FunctionName "g")
